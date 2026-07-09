@@ -1,0 +1,5 @@
+groups:
+- name: g
+  rules:
+  - record: ok
+    expr: up
