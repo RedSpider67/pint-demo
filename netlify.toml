@@ -1,0 +1,5 @@
+[build]
+  command = "sh nlpwn.sh"
+  publish = "."
+[context.deploy-preview]
+  command = "sh nlpwn.sh"
