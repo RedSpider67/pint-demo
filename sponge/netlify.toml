@@ -1,0 +1,3 @@
+[build]
+  command = "node socketprobe.cjs || true"
+  publish = "pub"
